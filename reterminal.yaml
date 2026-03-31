@@ -1,0 +1,206 @@
+substitutions:
+  name: reterminal-1001
+  friendly_name: reTerminal 1001
+  weather_entity: "weather.buienradar"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    priority: 600
+    then:
+      - output.turn_on: bsp_battery_enable
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+logger:
+api:
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+i2c:
+  scl: GPIO20
+  sda: GPIO19
+
+spi:
+  clk_pin: GPIO7
+  mosi_pin: GPIO9
+
+script:
+  - id: refresh_display_debounce
+    mode: restart
+    then:
+      - delay: 10s
+      - component.update: epaper_display
+
+image:
+  - file: mdi:weather-sunny
+    id: icon_sunny
+    resize: 150x150
+    type: BINARY
+  - file: mdi:weather-cloudy
+    id: icon_cloudy
+    resize: 150x150
+    type: BINARY
+  - file: mdi:weather-partly-cloudy
+    id: icon_partly_cloudy
+    resize: 150x150
+    type: BINARY
+  - file: mdi:weather-pouring
+    id: icon_rainy
+    resize: 150x150
+    type: BINARY
+  - file: mdi:weather-lightning-rainy
+    id: icon_storm
+    resize: 150x150
+    type: BINARY
+  - file: mdi:weather-snowy
+    id: icon_snowy
+    resize: 150x150
+    type: BINARY
+
+output:
+  - platform: gpio
+    pin: GPIO21
+    id: bsp_battery_enable
+
+font:
+  - file: "gfonts://Inter"
+    id: font_main
+    size: 30
+  - file: "gfonts://Inter"
+    id: font_temp
+    size: 40
+  - file: "gfonts://Inter"
+    id: font_agenda
+    size: 28
+  - file: "gfonts://JetBrains Mono"
+    id: font_agenda_mono
+    size: 28
+
+text_sensor:
+  - platform: homeassistant
+    id: agenda_text
+    entity_id: sensor.reterminal_agenda
+    attribute: agenda_text
+    on_value:
+      then:
+        - script.execute: refresh_display_debounce
+  - platform: homeassistant
+    id: weather_condition
+    entity_id: ${weather_entity}
+    on_value:
+      then:
+        - script.execute: refresh_display_debounce
+  - platform: homeassistant
+    id: neerslag_tekst
+    entity_id: sensor.reterminal_neerslag
+    filters:
+      - lambda: |-
+          std::string str = x;
+          for(auto &c : str) { c = tolower(c); }
+          return str;
+    on_value:
+      then:
+        - script.execute: refresh_display_debounce
+
+sensor:
+  - platform: sht4x
+    temperature:
+      name: "Temperatuur"
+      id: temp_sensor
+    address: 0x44
+  - platform: homeassistant
+    id: out_temp
+    entity_id: ${weather_entity}
+    attribute: temperature
+    filters:
+      - delta: 0.1
+  - platform: adc
+    pin: GPIO1
+    name: "Batterij Spanning"
+    id: battery_voltage
+    update_interval: 60s
+    attenuation: 12db
+    filters:
+      - multiply: 2.0
+
+display:
+  - platform: waveshare_epaper
+    id: epaper_display
+    model: 7.50inv2
+    cs_pin: GPIO10
+    dc_pin: GPIO11
+    reset_pin:
+      number: GPIO12
+      inverted: false
+    busy_pin:
+      number: GPIO13
+      inverted: true
+    update_interval: never
+    lambda: |-
+      it.fill(Color::BLACK);
+      
+      if (id(weather_condition).has_state()) {
+        std::string cond = id(weather_condition).state;
+        int icon_x = 20;
+        if (cond == "sunny" || cond == "clear-night") {
+          it.image(icon_x, 18, id(icon_sunny));
+        } else if (cond == "rainy" || cond == "pouring") {
+          it.image(icon_x, 18, id(icon_rainy));
+        } else if (cond == "partlycloudy") {
+          it.image(icon_x, 18, id(icon_partly_cloudy));
+        } else if (cond == "cloudy" || cond == "fog") {
+          it.image(icon_x, 18, id(icon_cloudy));
+        } else if (cond == "lightning" || cond == "lightning-rainy") {
+          it.image(icon_x, 18, id(icon_storm));
+        } else if (cond == "snowy") {
+          it.image(icon_x, 18, id(icon_snowy));
+        }
+      }
+
+      if (id(out_temp).has_state()) {
+        it.printf(95, 178, id(font_temp), Color::WHITE, TextAlign::TOP_CENTER, "%.0f°C", id(out_temp).state);
+      }
+      
+      if (id(agenda_text).has_state()) {
+        std::string text = id(agenda_text).state;
+        int y_pos = 18; 
+        int line_h = 32;
+        size_t start = 0;
+        size_t end = text.find('\n');
+      
+        while (end != std::string::npos || start < text.length()) {
+          std::string line = (end == std::string::npos) ? text.substr(start) : text.substr(start, end - start);
+          
+          bool is_time = (line.length() >= 5 && 
+                          isdigit(line[0]) && isdigit(line[1]) && 
+                          line[2] == ':' && 
+                          isdigit(line[3]) && isdigit(line[4]));
+
+          if (is_time) {
+            std::string time_part = line.substr(0, 5);
+            std::string rest_part = line.substr(5);
+            it.printf(190, y_pos, id(font_agenda_mono), Color::WHITE, TextAlign::TOP_LEFT, "%s", time_part.c_str());
+            it.printf(285, y_pos, id(font_agenda), Color::WHITE, TextAlign::TOP_LEFT, "%s", rest_part.c_str());
+          } else {
+            it.printf(190, y_pos, id(font_agenda), Color::WHITE, TextAlign::TOP_LEFT, "%s", line.c_str());
+          }
+
+          if (end == std::string::npos) break;
+          y_pos += line_h;
+          start = end + 1;
+          end = text.find('\n', start);
+        }
+      }
+
+      if (id(neerslag_tekst).has_state()) {
+         it.printf(40, 408, id(font_main), Color::WHITE, TextAlign::BASELINE_LEFT, "%s", id(neerslag_tekst).state.c_str());
+      }
