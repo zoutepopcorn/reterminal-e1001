@@ -6,11 +6,10 @@ This is an ESPHome configuration for an reTerminal e1001 (ESP32-S3 based e-paper
 
 # What do you need?
 - a reTermminal e1001
-- a working home-assistant in your home
+- a working home-assistant
 
 # How does it work?
-The reTerminal will connect to your wifi and home
-
+The reTerminal will connect to your wifi and Home Assistant
 
 # What to do?
 
@@ -21,8 +20,14 @@ The reTerminal will connect to your wifi and home
 
 ### setup python venv
 Make sure you have python 3 installed. At this moment I have python 3.9.6.
+
 ```bash
+# only first time
+python -m venv .venv
+# everytime you run 
 source .venv/bin/activate
+# install esphome
+pip install esphome pillow
 ```
 
 ### Flash 
@@ -34,7 +39,7 @@ esphome run reterminal.yaml --device /dev/tty.usbserial-10
 ## on Home Assistant
 Look in the folder /home-assistant for an example. 
 
-The reterminal will need reterminal_neerslag and reterminal_agenda from home assistant.
+The reterminal will need reterminal_neerslag and reterminal_agenda from Home Assistant.
 
 
 # ! Warning Vibe coded !
