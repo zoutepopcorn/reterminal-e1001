@@ -37,7 +37,14 @@ esphome run reterminal.yaml --device /dev/tty.usbserial-10
 ```
 
 ## on Home Assistant
-Look in the folder /home-assistant for an example. 
+Go to Settings > Devices & Services in Home Assistant.
+Look at the top under Discovered. There is a good chance Home Assistant has already found the device automatically as an ESPHome device. In that case, simply click Configure.
+Not under Discovered? Click Add Integration at the bottom right.
+Search for ESPHome and click on it.
+For the host, enter: name.local (or use the IP address).
+Click Submit.
+
+Look in the folder (from this git) /home-assistant for an example. 
 
 The reterminal will need reterminal_neerslag and reterminal_agenda from Home Assistant.
 
